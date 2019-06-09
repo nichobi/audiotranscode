@@ -44,7 +44,7 @@ def run(config: Config, files: Seq[Path]) {
     val command = Seq("ffmpeg", "-y", "-nostats", "-hide_banner",
       "-fflags", "+genpts", "-i", tempInPath, "-map", "0", "-map", "0:a", 
       "-flags", "+global_header", "-codec", "copy") ++ 
-      audioCodecs(audioCount) ++ Seq("-f", "matroska", tempOutPath)
+      audioCodecs(config, audioCount) ++ Seq("-f", "matroska", tempOutPath)
     val result = (command.!)
     if(result == 0) {
       Seq("mv", "-v", tempOutPath, outPath).!
@@ -57,13 +57,8 @@ def run(config: Config, files: Seq[Path]) {
 
 // Returns the ammount of audio streams in the given input file
 def audioStreams(file: String): Int = {
-  val out = new StringBuilder
-  val err = new StringBuilder
-  val logger = ProcessLogger(
-    (o: String) => out.append(o + '\n'),
-    (e: String) => err.append(e + '\n'))
-  Seq("ffprobe", "-i", file).!(logger)
-  err.split('\n').filter(s => s.contains("Stream") && s.contains("Audio")).size
+  val result = os.proc("ffprobe", "-i", file).call()
+  result.err.lines.filter(s => s.contains("Stream") && s.contains("Audio")).size
 }
 
 // Creates a list of codec options for an input file with n audio streams
