@@ -3,13 +3,12 @@ exec amm "$0" "$@"
 !#
 
 import scala.sys.process._
-import os.Path
 
 @main
 def main(args: String*): Unit = {
   val (options, fileStrings) = args.partition(_.startsWith("-"))
   val config = parseOptions(options)
-  val files = fileStrings.map(x => Path(x, base=os.pwd))
+  val files = fileStrings.map(x => os.FilePath(x))
   run(config, files)
 }
 
@@ -30,7 +29,7 @@ def parseOptions(options: Seq[String]): Config = {
   config
 }
 
-def run(config: Config, files: Seq[Path]) {
+def run(config: Config, files: Seq[os.FilePath]) {
   for (inPath <- files.map(_.toString)) {
     val base = inPath.replaceAll("\\.[^.]*$", "")
     val tempInPath = base + ".original-temp"
