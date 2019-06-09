@@ -12,7 +12,7 @@ def main(args: String*): Unit = {
   run(config, files)
 }
 
-case class Config(replaceStreams: Boolean = false)
+case class Config(replaceStreams: Boolean = false, transcodesFirst: Boolean = false)
 
 def parseOptions(options: Seq[String]): Config = {
   var config = Config()
@@ -22,7 +22,8 @@ def parseOptions(options: Seq[String]): Config = {
      |Convert the audio tracks of the given files to stereo AAC streams, replacing the files with new matroska (.mkv) files.
      |By default the transcodes tracks are added as extra tracks, pass -t to replace the originals""".stripMargin)
       sys.exit()}
-    case "-t" => config=config.copy(replaceStreams=true)
+    case "-t" => config = config.copy(replaceStreams = true)
+    case "-o" => config = config.copy(transcodesFirst = true)
     case _ => println("Invalid args")
       sys.exit
   }
@@ -68,12 +69,14 @@ def audioCodecs(config: Config, n: Int): Seq[String] = {
     }
     transcodes.flatten
   } else {
-    val copies = for(i<- 0 until n) yield {
-      Seq("-c:a:"+i, "copy")
+    val first = for(i<- 0 until n) yield {
+      if(config.transcodesFirst) Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
+      else Seq("-c:a:"+i, "copy")
     }
-    val transcodes = for(i<- n until n*2) yield {
-      Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
+    val second = for(i<- n until n*2) yield {
+      if(config.transcodesFirst) Seq("-c:a:"+i, "copy")
+      else Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
     }
-    (copies ++ transcodes).flatten
+    (first ++ second).flatten
   }
 }
