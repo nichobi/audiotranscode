@@ -13,17 +13,17 @@ def main(args: String*): Unit = {
   run(config, files)
 }
 
-case class Config(replace: Boolean = false)
+case class Config(replaceStreams: Boolean = false)
 
 def parseOptions(options: Seq[String]): Config = {
   var config = Config()
   options foreach {
-    case "-h" => {
+    case "-h"|"--help" => {
       println("""Usage: audiotranscode [OPTION]... [FILE]...
-      Convert the audio tracks of the given files to stereo AAC streams, replacing the files with new matroska (.mkv) files.
-      By default the transcodes tracks are added as extra tracks, pass -r to replace the originals""".stripMargin)
+     |Convert the audio tracks of the given files to stereo AAC streams, replacing the files with new matroska (.mkv) files.
+     |By default the transcodes tracks are added as extra tracks, pass -t to replace the originals""".stripMargin)
       sys.exit()}
-    case "-r" => config=config.copy(replace=true)
+    case "-t" => config=config.copy(replaceStreams=true)
     case _ => println("Invalid args")
       sys.exit
   }
@@ -67,12 +67,19 @@ def audioStreams(file: String): Int = {
 }
 
 // Creates a list of codec options for an input file with n audio streams
-def audioCodecs(n: Int): Seq[String] = {
-  val copies = for(i<- 0 until n) yield {
-    Seq("-c:a:"+i, "copy")
+def audioCodecs(config: Config, n: Int): Seq[String] = {
+  if(config.replaceStreams) {
+    val transcodes = for(i<- 0 until n) yield {
+      Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
+    }
+    transcodes.flatten
+  } else {
+    val copies = for(i<- 0 until n) yield {
+      Seq("-c:a:"+i, "copy")
+    }
+    val transcodes = for(i<- n until n*2) yield {
+      Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
+    }
+    (copies ++ transcodes).flatten
   }
-  val transcodes = for(i<- n until n*2) yield {
-    Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
-  }
-  (copies ++ transcodes).flatten
 }
