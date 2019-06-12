@@ -1,5 +1,5 @@
 #!/bin/sh
-exec amm "$0" "$@"
+exec amm --silent "$0" "$@"
 !#
 
 import scala.sys.process._
