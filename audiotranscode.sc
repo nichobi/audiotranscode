@@ -3,12 +3,14 @@ exec amm "$0" "$@"
 !#
 
 import scala.sys.process._
+import os.{Path, Shellable, proc}
+import $file.util
 
 @main
 def main(args: String*): Unit = {
   val (options, fileStrings) = args.partition(_.startsWith("-"))
   val config = parseOptions(options)
-  val files = fileStrings.map(x => os.FilePath(x))
+  val files = fileStrings.map(x => Path(x, base=os.pwd))
   run(config, files)
 }
 
@@ -27,58 +29,60 @@ def parseOptions(options: Seq[String]): Config = {
       sys.exit()}
     case "-t" => config = config.copy(replaceStreams = true)
     case "-o" => config = config.copy(transcodesFirst = true)
+    case "-f" => config = config.copy(replaceFiles = true)
     case _ => println("Invalid args")
       sys.exit
   }
   config
 }
 
-def run(config: Config, files: Seq[os.FilePath]) {
-  for (inPath <- files.map(_.toString)) {
-    val base = inPath.replaceAll("\\.[^.]*$", "")
-    val tempInPath = base + ".original-temp"
-    val outPath = base + ".mkv"
-    val tempOutPath = base + ".new-temp"
-  
-    Seq("mv", inPath, tempInPath).!
-    val audioCount = audioStreams(tempInPath)
-    //Create ffmpeg command, with audio mapped twice, once 
-    //for trancode and once for copy
-    val command = Seq("ffmpeg", "-y", "-nostats", "-hide_banner",
-      "-fflags", "+genpts", "-i", tempInPath, "-map", "0", "-map", "0:a", 
-      "-flags", "+global_header", "-codec", "copy") ++ 
-      audioCodecs(config, audioCount) ++ Seq("-f", "matroska", tempOutPath)
-    val result = (command.!)
-    if(result == 0) {
-      Seq("mv", "-v", tempOutPath, outPath).!
-      val result2 = (Seq("rm", "-v", tempInPath).!)
-      if (result2 != 0) {println("rm error"); System.exit(result2)}
+def createFfmpegCommand(config: Config, input: Path, output: Path): proc  = {
+  val initialArgs = Seq[Shellable]("ffmpeg", "-y", "-nostats", "-hide_banner", 
+		"-fflags", "+genpts", "-i", input.toString, "-map", "0", "-map", "0:a",
+		"-flags", "+global_header", "-codec", "copy")
+  val finalArgs = Seq[Shellable]("-f", "matroska", output.toString)
+  val audioCount = audioStreams(input)
+  proc(initialArgs ++ audioCodecs(config, audioCount) ++ finalArgs)
+}
+
+def run(config: Config, files: Seq[Path]) {
+  for (file <- files) {
+    val parent = file / os.up
+    val base = file.baseName
+    val tempInPath = parent / (base + ".original-temp")
+    val outPath = parent / (base + ".mkv")
+    val tempOutPath = parent / (base + ".new-temp")
+    util.move(file, tempInPath)
+    val result = createFfmpegCommand(config, tempInPath, tempOutPath).call()
+    if(result.exitCode == 0) {
+      util.move(tempOutPath, outPath)
+      os.remove(tempInPath)
     }
-    if (result != 0) {println("ffmpeg error"); System.exit(result)}
   }
 }
 
 // Returns the ammount of audio streams in the given input file
-def audioStreams(file: String): Int = {
-  val result = os.proc("ffprobe", "-i", file).call()
+def audioStreams(file: Path): Int = {
+  val result = proc("ffprobe", "-i", file).call()
   result.err.lines.filter(s => s.contains("Stream") && s.contains("Audio")).size
 }
 
 // Creates a list of codec options for an input file with n audio streams
-def audioCodecs(config: Config, n: Int): Seq[String] = {
+def audioCodecs(config: Config, n: Int): Seq[Shellable] = {
   if(config.replaceStreams) {
     val transcodes = for(i<- 0 until n) yield {
-      Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
+      Seq[Shellable]("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
     }
     transcodes.flatten
   } else {
     val first = for(i<- 0 until n) yield {
-      if(config.transcodesFirst) Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
-      else Seq("-c:a:"+i, "copy")
+      if(config.transcodesFirst) Seq[Shellable]("-c:a:"+ i.toString, 
+        "libfdk_aac", "-ac", "2", "-vbr", "4")
+      else Seq[Shellable]("-c:a:"+i, "copy")
     }
     val second = for(i<- n until n*2) yield {
-      if(config.transcodesFirst) Seq("-c:a:"+i, "copy")
-      else Seq("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
+      if(config.transcodesFirst) Seq[Shellable]("-c:a:"+i, "copy")
+      else Seq[Shellable]("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
     }
     (first ++ second).flatten
   }
