@@ -12,7 +12,10 @@ def main(args: String*): Unit = {
   run(config, files)
 }
 
-case class Config(replaceStreams: Boolean = false, transcodesFirst: Boolean = false)
+case class Config(
+  replaceStreams: Boolean = false,
+  transcodesFirst: Boolean = false,
+  replaceFiles: Boolean = false)
 
 def parseOptions(options: Seq[String]): Config = {
   var config = Config()
