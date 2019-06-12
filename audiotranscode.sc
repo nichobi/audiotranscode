@@ -53,7 +53,10 @@ def run(config: Config, files: Seq[Path]) {
     val outPath = parent / (base + ".mkv")
     val tempOutPath = parent / (base + ".new-temp")
     util.move(file, tempInPath)
-    val result = createFfmpegCommand(config, tempInPath, tempOutPath).call()
+    val command = createFfmpegCommand(config, tempInPath, tempOutPath)
+    println(s"FFmpeg command:\n  ${commandToString(command)}")
+    val result = command.call()
+    println("ffmpeg complete!")
     val streamMapping = result.err.lines.span(!_.contains("Stream mapping:"))
       ._2.takeWhile(_.contains("Stream"))
     streamMapping.foreach(println)
@@ -89,4 +92,8 @@ def audioCodecs(config: Config, n: Int): Seq[Shellable] = {
     }
     (first ++ second).flatten
   }
+}
+
+def commandToString(command: os.proc) = {
+  command.command(0).value.mkString(" ")
 }
