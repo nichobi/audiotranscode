@@ -54,6 +54,9 @@ def run(config: Config, files: Seq[Path]) {
     val tempOutPath = parent / (base + ".new-temp")
     util.move(file, tempInPath)
     val result = createFfmpegCommand(config, tempInPath, tempOutPath).call()
+    val streamMapping = result.err.lines.span(!_.contains("Stream mapping:"))
+      ._2.takeWhile(_.contains("Stream"))
+    streamMapping.foreach(println)
     if(result.exitCode == 0) {
       util.move(tempOutPath, outPath)
       os.remove(tempInPath)
