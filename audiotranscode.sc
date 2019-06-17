@@ -17,19 +17,25 @@ def main(args: String*): Unit = {
 case class Config(
   replaceStreams: Boolean = false,
   transcodesFirst: Boolean = false,
-  replaceFiles: Boolean = false)
+  replaceFiles: Boolean = true)
 
 def parseOptions(options: Seq[String]): Config = {
   var config = Config()
   options foreach {
     case "-h"|"--help" => {
       println("""Usage: audiotranscode [OPTION]... [FILE]...
-     |Convert the audio tracks of the given files to stereo AAC streams, replacing the files with new matroska (.mkv) files.
-     |By default the transcodes tracks are added as extra tracks, pass -t to replace the originals""".stripMargin)
+      |Convert the audio tracks of the given files to stereo AAC streams, replacing the files with new matroska (.mkv) files.
+      |By default the transcodes tracks are added as extra tracks, pass -t to replace the originals
+      |
+      |Options:
+      |  -h, --help       Show this message
+      |  -t               Don't include copies of the original audio streams, only the transcodes
+      |  -o               Map the transcoded streams ahead of the copies (does nothing when paired with -t)
+      |  -k               Keep the original files """.stripMargin)
       sys.exit()}
     case "-t" => config = config.copy(replaceStreams = true)
     case "-o" => config = config.copy(transcodesFirst = true)
-    case "-f" => config = config.copy(replaceFiles = true)
+    case "-k" => config = config.copy(replaceFiles = false)
     case _ => println("Invalid args")
       sys.exit
   }
