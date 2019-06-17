@@ -53,22 +53,39 @@ def createFfmpegCommand(config: Config, input: Path, output: Path): proc  = {
 
 def run(config: Config, files: Seq[Path]) {
   for (file <- files) {
-    val parent = file / os.up
-    val base = file.baseName
-    val tempInPath = parent / (base + ".original-temp")
-    val outPath = parent / (base + ".mkv")
-    val tempOutPath = parent / (base + ".new-temp")
-    util.move(file, tempInPath)
-    val command = createFfmpegCommand(config, tempInPath, tempOutPath)
-    println(s"FFmpeg command:\n  ${commandToString(command)}")
-    val result = command.call()
-    println("ffmpeg complete!")
-    val streamMapping = result.err.lines.span(!_.contains("Stream mapping:"))
-      ._2.takeWhile(_.contains("Stream"))
-    streamMapping.foreach(println)
-    if(result.exitCode == 0) {
-      util.move(tempOutPath, outPath)
-      os.remove(tempInPath)
+    if (config.replaceFiles) {
+      val parent = file / os.up
+      val base = file.baseName
+      val tempInPath = parent / (base + ".original-temp")
+      val outPath = parent / (base + ".mkv")
+      val tempOutPath = parent / (base + ".new-temp")
+      util.move(file, tempInPath)
+      val command = createFfmpegCommand(config, tempInPath, tempOutPath)
+      println(s"FFmpeg command:\n  ${commandToString(command)}")
+      val result = command.call()
+      println("ffmpeg complete!")
+      val streamMapping = result.err.lines.span(!_.contains("Stream mapping:"))
+        ._2.takeWhile(_.contains("Stream"))
+      streamMapping.foreach(println)
+      if(result.exitCode == 0) {
+        util.move(tempOutPath, outPath)
+        os.remove(tempInPath)
+      }
+    } else {
+      val parent = file / os.up
+      val base = file.baseName
+      val outPath = parent / (base + "-transcoded.mkv")
+      val tempOutPath = parent / (base + ".transcoded-temp")
+      val command = createFfmpegCommand(config, file, tempOutPath)
+      println(s"FFmpeg command:\n  ${commandToString(command)}")
+      val result = command.call()
+      println("FFmpeg complete!")
+      val streamMapping = result.err.lines.span(!_.contains("Stream mapping:"))
+        ._2.takeWhile(_.contains("Stream"))
+      streamMapping.foreach(println)
+      if(result.exitCode == 0) {
+        util.move(tempOutPath, outPath)
+      }
     }
   }
 }
