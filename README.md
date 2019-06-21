@@ -8,3 +8,4 @@ Options:
   -t               Don't include copies of the original audio streams, only the transcodes  
   -o               Map the transcoded streams ahead of the copies (does nothing when paired with -t)  
   -k               Keep the original files  
+  -m               Transcode audio to MP3, rather than AAC

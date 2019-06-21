@@ -17,7 +17,8 @@ def main(args: String*): Unit = {
 case class Config(
   replaceStreams: Boolean = false,
   transcodesFirst: Boolean = false,
-  replaceFiles: Boolean = true)
+  replaceFiles: Boolean = true,
+  mp3: Boolean = true)
 
 def parseOptions(options: Seq[String]): Config = {
   var config = Config()
@@ -31,7 +32,8 @@ def parseOptions(options: Seq[String]): Config = {
       |  -h, --help       Show this message
       |  -t               Don't include copies of the original audio streams, only the transcodes
       |  -o               Map the transcoded streams ahead of the copies (does nothing when paired with -t)
-      |  -k               Keep the original files """.stripMargin)
+      |  -k               Keep the original files
+      |  -m               Transcode audio to MP3, rather than AAC""".stripMargin)
       sys.exit()}
     case "-t" => config = config.copy(replaceStreams = true)
     case "-o" => config = config.copy(transcodesFirst = true)
@@ -99,21 +101,26 @@ def audioStreams(file: Path): Int = {
 // Creates a list of codec options for an input file with n audio streams
 def audioCodecs(config: Config, n: Int): Seq[Shellable] = {
   if(config.replaceStreams) {
-    val transcodes = for(i<- 0 until n) yield {
-      Seq[Shellable]("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
-    }
+    val transcodes = for(i<- 0 until n) yield codecString(config, i)
     transcodes.flatten
   } else {
     val first = for(i<- 0 until n) yield {
-      if(config.transcodesFirst) Seq[Shellable]("-c:a:"+ i.toString, 
-        "libfdk_aac", "-ac", "2", "-vbr", "4")
+      if(config.transcodesFirst) codecString(config, i)
       else Seq[Shellable]("-c:a:"+i, "copy")
     }
     val second = for(i<- n until n*2) yield {
       if(config.transcodesFirst) Seq[Shellable]("-c:a:"+i, "copy")
-      else Seq[Shellable]("-c:a:"+i, "libfdk_aac", "-ac", "2", "-vbr", "4")
+      else codecString(config, i)
     }
     (first ++ second).flatten
+  }
+}
+
+def codecString(config: Config, n: Int) = {
+  if(config.mp3) {
+    Seq[Shellable]("-c:a:" + n.toString, "libmp3lame", "-ac", "2", "-b:a", "320k")
+  } else {
+    Seq[Shellable]("-c:a:" + n.toString, "libfdk_aac", "-ac", "2", "-vbr", "4")
   }
 }
 
