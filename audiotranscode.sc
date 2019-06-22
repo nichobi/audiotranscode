@@ -9,9 +9,9 @@ import $file.util
 @main
 def main(args: String*): Unit = {
   val (options, fileStrings) = args.partition(_.startsWith("-"))
-  val config = parseOptions(options)
+  implicit val config = parseOptions(options)
   val files = fileStrings.map(x => Path(x, base=os.pwd))
-  run(config, files)
+  run(files)
 }
 
 case class Config(
@@ -44,16 +44,16 @@ def parseOptions(options: Seq[String]): Config = {
   config
 }
 
-def createFfmpegCommand(config: Config, input: Path, output: Path): proc  = {
+def createFfmpegCommand(input: Path, output: Path)(implicit config: Config): proc  = {
   val initialArgs = Seq[Shellable]("ffmpeg", "-y", "-nostats", "-hide_banner", 
 		"-fflags", "+genpts", "-i", input.toString, "-map", "0", "-map", "0:a",
 		"-flags", "+global_header", "-codec", "copy")
   val finalArgs = Seq[Shellable]("-f", "matroska", output.toString)
   val audioCount = audioStreams(input)
-  proc(initialArgs ++ audioCodecs(config, audioCount) ++ finalArgs)
+  proc(initialArgs ++ audioCodecs(audioCount) ++ finalArgs)
 }
 
-def run(config: Config, files: Seq[Path]) {
+def run(files: Seq[Path])(implicit config: Config) {
   for (file <- files) {
     if (config.replaceFiles) {
       val parent = file / os.up
@@ -62,7 +62,7 @@ def run(config: Config, files: Seq[Path]) {
       val outPath = parent / (base + ".mkv")
       val tempOutPath = parent / (base + ".new-temp")
       util.move(file, tempInPath)
-      val command = createFfmpegCommand(config, tempInPath, tempOutPath)
+      val command = createFfmpegCommand(tempInPath, tempOutPath)
       println(s"FFmpeg command:\n  ${commandToString(command)}")
       val result = command.call()
       println("ffmpeg complete!")
@@ -78,7 +78,7 @@ def run(config: Config, files: Seq[Path]) {
       val base = file.baseName
       val outPath = parent / (base + "-transcoded.mkv")
       val tempOutPath = parent / (base + ".transcoded-temp")
-      val command = createFfmpegCommand(config, file, tempOutPath)
+      val command = createFfmpegCommand(file, tempOutPath)
       println(s"FFmpeg command:\n  ${commandToString(command)}")
       val result = command.call()
       println("FFmpeg complete!")
@@ -99,24 +99,24 @@ def audioStreams(file: Path): Int = {
 }
 
 // Creates a list of codec options for an input file with n audio streams
-def audioCodecs(config: Config, n: Int): Seq[Shellable] = {
+def audioCodecs(n: Int)(implicit config: Config): Seq[Shellable] = {
   if(config.replaceStreams) {
-    val transcodes = for(i<- 0 until n) yield codecString(config, i)
+    val transcodes = for(i<- 0 until n) yield codecString(i)
     transcodes.flatten
   } else {
     val first = for(i<- 0 until n) yield {
-      if(config.transcodesFirst) codecString(config, i)
+      if(config.transcodesFirst) codecString(i)
       else Seq[Shellable]("-c:a:"+i, "copy")
     }
     val second = for(i<- n until n*2) yield {
       if(config.transcodesFirst) Seq[Shellable]("-c:a:"+i, "copy")
-      else codecString(config, i)
+      else codecString(i)
     }
     (first ++ second).flatten
   }
 }
 
-def codecString(config: Config, n: Int) = {
+def codecString(n: Int)(implicit config: Config) = {
   if(config.mp3) {
     Seq[Shellable]("-c:a:" + n.toString, "libmp3lame", "-ac", "2", "-b:a", "320k")
   } else {
